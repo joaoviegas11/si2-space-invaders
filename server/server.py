@@ -1,10 +1,17 @@
+__author__ = "Mário Antunes"
+__version__ = "1.0.0"
+__email__ = "mario.antunes@ua.pt"
+__status__ = "Development"
+
 import logging
 from typing import Dict, Any, Optional
 
 import aigf.interface as interface
-import server.logic as logic
+from . import logic
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - SPACE_INVADERS - %(levelname)s - %(message)s")
+logging.getLogger("websockets").setLevel(logging.WARNING)
+
 
 class SpaceInvadersGameServer(interface.GameInterface):
     """
@@ -33,6 +40,15 @@ class SpaceInvadersGameServer(interface.GameInterface):
             self.state = interface.GameState.LOBBY
             self.game.reset_game()
 
+    async def on_start_sim(self) -> None:
+        """
+        Only start the simulation if an agent is connected.
+        """
+        if self.player_id is not None:
+            self.state = interface.GameState.RUNNING
+        else:
+            logging.warning("Cannot start simulation: no agent connected.")
+
     async def on_reset_sim(self) -> None:
         """
         Natively called by the framework when a RESET command is received.
@@ -57,7 +73,7 @@ class SpaceInvadersGameServer(interface.GameInterface):
                 self.game.shoot_laser()
 
     async def tick(self, dt: float) -> None:
-        if self.state == interface.GameState.RUNNING:
+        if self.state == interface.GameState.RUNNING and self.player_id is not None:
             self.game.update(dt)
             if self.game.game_over:
                 logging.info("Game Over!")

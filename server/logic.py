@@ -1,3 +1,8 @@
+__author__ = "Mário Antunes"
+__version__ = "1.0.0"
+__email__ = "mario.antunes@ua.pt"
+__status__ = "Development"
+
 import math
 import random
 from typing import Dict, List, Any
@@ -46,31 +51,34 @@ class Alien:
         
         self.active = True
 
-    def update(self, dt: float, time_elapsed: float):
+    def update(self, dt: float, time_elapsed: float, base_shift_x: float = 0.0, player_x: float = None):
         if not self.active:
             return
 
         if not self.is_diving:
-            # Figure-8 parametric motion
-            self.x = self.base_x + self.amp_x * math.sin(self.freq * time_elapsed + self.phase)
+            # Figure-8 parametric motion + global shift
+            self.x = (self.base_x + base_shift_x) + self.amp_x * math.sin(self.freq * time_elapsed + self.phase)
             self.y = self.base_y + self.amp_y * math.sin(2.0 * self.freq * time_elapsed + self.phase)
         else:
-            # Linear diving motion towards (target_x, 0.0)
-            dx = self.target_x - self.dive_start_x
-            dy = self.target_y - self.dive_start_y
-            dist = math.sqrt(dx*dx + dy*dy)
+            # Homing tracking: if the alien is above y = 3.0, track the player's current x position
+            if player_x is not None and self.y > 3.0:
+                self.target_x = player_x
+
+            # Constant downward speed
+            vy = -self.dive_speed
             
-            if dist > 0.0:
-                vx = (dx / dist) * self.dive_speed
-                vy = (dy / dist) * self.dive_speed
-            else:
-                vx = 0.0
-                vy = -self.dive_speed
+            # Horizontal motion tracks target_x
+            dx = self.target_x - self.x
+            vx = dx * 4.0
+            if vx > self.dive_speed:
+                vx = self.dive_speed
+            elif vx < -self.dive_speed:
+                vx = -self.dive_speed
             
             self.x += vx * dt
             self.y += vy * dt
 
-    def start_dive(self, player_x: float, speed: float = 5.0):
+    def start_dive(self, player_x: float, speed: float = 8.0):
         self.is_diving = True
         self.dive_start_x = self.x
         self.dive_start_y = self.y
@@ -182,15 +190,18 @@ class SpaceInvaders:
         self.lasers = active_lasers
 
         # 2. Update Aliens
+        sweep_offset = 1.5 * math.sin(1.2 * self.time_elapsed)
         for alien in self.aliens:
-            alien.update(dt, self.time_elapsed)
+            alien.update(dt, self.time_elapsed, base_shift_x=sweep_offset, player_x=self.player_x)
 
         # 3. Schedule Alien Dives
-        if self.time_since_last_dive >= self.dive_cooldown:
+        current_cooldown = max(1.5, self.dive_cooldown - 0.005 * self.score)
+        if self.time_since_last_dive >= current_cooldown:
             available_aliens = [a for a in self.aliens if a.active and not a.is_diving]
             if available_aliens:
                 diving_alien = random.choice(available_aliens)
-                diving_alien.start_dive(self.player_x, speed=5.0)
+                dive_speed = min(12.0, 8.0 + 0.01 * self.score)
+                diving_alien.start_dive(self.player_x, speed=dive_speed)
             self.time_since_last_dive = 0.0
 
         # 4. Check Laser-Alien Collisions (Distance < 0.8) using numpy
@@ -249,6 +260,15 @@ class SpaceInvaders:
             self._init_aliens()
 
     def get_state(self) -> Dict[str, Any]:
+        valid_actions = []
+        if not self.game_over:
+            if self.player_x > 0.0:
+                valid_actions.append({"action": "move", "direction": "WEST"})
+            if self.player_x < self.width - 1.0:
+                valid_actions.append({"action": "move", "direction": "EAST"})
+            if self.time_since_last_shoot >= self.shoot_cooldown:
+                valid_actions.append({"action": "shoot"})
+
         return {
             "width": self.width,
             "height": self.height,
@@ -259,5 +279,6 @@ class SpaceInvaders:
             "high_score": self.high_score,
             "game_over": self.game_over,
             "lasers": [las.to_dict() for las in self.lasers],
-            "aliens": [a.to_dict() for a in self.aliens if a.active]
+            "aliens": [a.to_dict() for a in self.aliens if a.active],
+            "valid_actions": valid_actions
         }

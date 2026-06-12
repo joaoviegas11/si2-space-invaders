@@ -1,3 +1,8 @@
+__author__ = "Mário Antunes"
+__version__ = "1.0.0"
+__email__ = "mario.antunes@ua.pt"
+__status__ = "Development"
+
 import json
 import logging
 from typing import Any, Dict, Optional
@@ -26,7 +31,7 @@ class BaseAgent:
                         logging.info(f"Assigned player ID: {self.player_id}")
                         continue
 
-                    if data.get("type") == "state":
+                    if data.get("type") == "state" or data.get("type") == "update":
                         self.current_state = data
                         action = await self.deliberate()
                         if action:

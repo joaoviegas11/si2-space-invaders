@@ -1,7 +1,14 @@
+__author__ = "Mário Antunes"
+__version__ = "1.0.0"
+__email__ = "mario.antunes@ua.pt"
+__status__ = "Development"
+
 import unittest
 from server.logic import SpaceInvaders, Laser
 
 class TestSpaceInvadersLogic(unittest.TestCase):
+    game: SpaceInvaders = SpaceInvaders()
+
     def setUp(self):
         self.game = SpaceInvaders(width=11, height=11)
 
@@ -41,12 +48,20 @@ class TestSpaceInvadersLogic(unittest.TestCase):
     def test_laser_alien_collision(self):
         self.game.lasers = [Laser(x=5.0, y=7.5)]
         
-        # Position alien exactly at (5.0, 8.3) and make it static
+        # Deactivate all aliens except index 0 and 2
+        # Index 0 is kept active and static to prevent wave clearing (active_count drops to 0)
+        # while being far enough to not interfere with the collision.
+        for i, alien in enumerate(self.game.aliens):
+            if i not in (0, 2):
+                alien.active = False
+            else:
+                alien.active = True
+                alien.amp_x = 0.0
+                alien.amp_y = 0.0
+            
+        # Position alien 2 exactly at (5.0, 8.3)
         self.game.aliens[2].base_x = 5.0
         self.game.aliens[2].base_y = 8.3
-        self.game.aliens[2].amp_x = 0.0
-        self.game.aliens[2].amp_y = 0.0
-        self.game.aliens[2].active = True
         
         self.game.update(0.1) # Updates positions, laser flies up to (5.0, 8.3)
         
@@ -106,6 +121,42 @@ class TestSpaceInvadersLogic(unittest.TestCase):
         
         # Squad respawned
         self.assertEqual(len([a for a in self.game.aliens if a.active]), 10)
+
+    def test_valid_actions(self):
+        # Initial state (player_x = 5.0, time_since_last_shoot >= shoot_cooldown)
+        state = self.game.get_state()
+        self.assertIn("valid_actions", state)
+        self.assertEqual(len(state["valid_actions"]), 3)
+        self.assertIn({"action": "move", "direction": "WEST"}, state["valid_actions"])
+        self.assertIn({"action": "move", "direction": "EAST"}, state["valid_actions"])
+        self.assertIn({"action": "shoot"}, state["valid_actions"])
+
+        # Move WEST repeatedly to bounds
+        for _ in range(10):
+            self.game.move_player("WEST")
+        state = self.game.get_state()
+        # Should not contain WEST
+        self.assertNotIn({"action": "move", "direction": "WEST"}, state["valid_actions"])
+        self.assertIn({"action": "move", "direction": "EAST"}, state["valid_actions"])
+
+        # Move EAST repeatedly to bounds
+        for _ in range(20):
+            self.game.move_player("EAST")
+        state = self.game.get_state()
+        # Should not contain EAST
+        self.assertNotIn({"action": "move", "direction": "EAST"}, state["valid_actions"])
+        self.assertIn({"action": "move", "direction": "WEST"}, state["valid_actions"])
+
+        # Shoot to trigger cooldown
+        self.game.shoot_laser()
+        state = self.game.get_state()
+        # Should not contain shoot
+        self.assertNotIn({"action": "shoot"}, state["valid_actions"])
+
+        # Game over state
+        self.game.game_over = True
+        state = self.game.get_state()
+        self.assertEqual(state["valid_actions"], [])
 
 if __name__ == "__main__":
     unittest.main()
