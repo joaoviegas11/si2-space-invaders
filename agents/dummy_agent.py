@@ -13,7 +13,7 @@ class DummyAgent(BaseAgent):
     async def deliberate(self) -> Optional[Dict[str, Any]]:
         if not self.current_state or self.current_state.get("game_over"):
             return None
-        
+        print(self.current_state)
         valid_actions = self.current_state.get("valid_actions", [])
         if valid_actions:
             # Randomly choose one of the valid actions or choose to do nothing (None)
