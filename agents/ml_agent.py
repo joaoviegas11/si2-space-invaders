@@ -1,58 +1,142 @@
 import asyncio
-import pickle
-import neat
+import json
 import numpy as np
+import cv2
+import torch
+import torch.nn as nn
 from typing import Optional, Dict, Any
 from agents.base_agent import BaseAgent
 
 def extract_features(state):
-    features = np.zeros(14)
-    width = state.get('width', 11)
-    height = state.get('height', 11)
+    width = int(state.get('width', 11))
+    height = float(state.get('height', 11))
+    player_x = state.get('player_x', 0)
     
-    features[0] = state.get('player_x', 0) / width
-    features[1] = state.get('player_y', 0) / height
-    features[2] = state.get('lives', 0) / 5.0
-    features[3] = min(state.get('score', 0) / 5000.0, 1.0)
+    features = np.zeros(6)
+    features[0] = player_x / float(width)
     
     lasers = state.get('lasers', [])
-    features[4] = 1.0 if lasers else 0.0
-    features[5] = lasers[0]['y'] / height if lasers else 0.5
+    features[1] = 1.0 if lasers else 0.0
+    features[2] = lasers[0]['y'] / height if lasers else 1.0
     
-    aliens = state.get('aliens', [])
-    if aliens:
-        closest_alien = min(aliens, key=lambda a: a['y'])
-        features[6] = closest_alien['x'] / width
-        features[7] = closest_alien['y'] / height
-        features[8] = len(aliens) / 10.0
-        features[9] = sum(a['x'] for a in aliens) / (len(aliens) * width)
-        features[10] = sum(a['y'] for a in aliens) / (len(aliens) * height)
-        features[11] = min(a['y'] for a in aliens) / height
-        features[12] = sum(1 for a in aliens if a['x'] < width/2) / 5.0
-        features[13] = sum(1 for a in aliens if a['x'] >= width/2) / 5.0
+    # alien_columns = np.zeros(width)
+    diving_aliens = []
+    
+    for alien in state.get('aliens', []):
+        # col = int(round(alien['x']))
+        # if 0 <= col < width:
+        #     alien_columns[col] = 1
+                
+        if alien.get('is_diving', False):
+            diving_aliens.append(alien)
+                
+    # features[3:14] = alien_columns[:11]
+    
+    if diving_aliens:
+        closest_diver = min(diving_aliens, key=lambda a: a['y'])
+        
+        features[3] = 1.0 
+        
+        features[4] = (closest_diver['x'] - player_x) / float(width)
+        
+        features[5] = closest_diver['y'] / height
+    else:
+        features[3] = 0.0
+        features[4] = 0.0
+        features[5] = 0.0
         
     return features
 
-class NeatAgent(BaseAgent):
-    def __init__(self, config_path, winner_path, server_uri="ws://localhost:8765/ws"):
-        super().__init__(server_uri)
-        
-        config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                             neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                             config_path)
-        
-        with open(winner_path, "rb") as f:
-            genome = pickle.load(f)
+class PyTorchAgent(nn.Module):
+    def __init__(self, input_dim=6, hidden_dim=5, output_dim=3):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x):
+        if not isinstance(x, torch.Tensor):
+            x = torch.tensor(x, dtype=torch.float32)
+        return self.fc2(self.relu(self.fc1(x)))
+
+    def predict_and_observe(self, x):
+        if not isinstance(x, torch.Tensor):
+            x = torch.tensor(x, dtype=torch.float32)
             
-        self.net = neat.nn.FeedForwardNetwork.create(genome, config)
+        in_layer = x
+        hidden_layer = self.relu(self.fc1(in_layer))
+        out_layer = self.fc2(hidden_layer)
+        
+        return out_layer, [in_layer.tolist(), hidden_layer.tolist(), out_layer.tolist()]
+
+    def update(self, weights_array: np.ndarray) -> None:
+        idx = 0
+        for param in self.parameters():
+            param_len = param.data.numel()
+            new_weights = weights_array[idx : idx + param_len]
+            param.data = torch.tensor(new_weights).view(param.data.size()).float()
+            idx += param_len
+
+class PyTorchSpaceAgent(BaseAgent):
+    def __init__(self, weights_path, server_uri="ws://localhost:8765/ws"):
+        super().__init__(server_uri)
+        self.model = PyTorchAgent()
+        
+        with open(weights_path, "r") as f:
+            weights = json.load(f)
+            self.model.update(np.array(weights))
+
+    def draw_network_cv2(self, activations, action_idx):
+        img = np.zeros((500, 800, 3), dtype=np.uint8)
+        
+        layers = [
+            (activations[0], 150, "Entrada (Sensores)"),
+            (activations[1], 400, "Oculta (ReLU)"),
+            (activations[2], 650, "Saida (Acoes)")
+        ]
+
+        for layer_idx, (layer_vals, x, name) in enumerate(layers):
+            num_nodes = len(layer_vals)
+            spacing = 400 // max(1, num_nodes)
+            start_y = 50 + (400 - spacing * num_nodes) // 2
+
+            cv2.putText(img, name, (x - 60, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+            for i, val in enumerate(layer_vals):
+                y = start_y + i * spacing
+                
+                if layer_idx == 0:
+                    intensity = min(255, max(0, int(val * 255)))
+                    color = (0, intensity, 0)
+                elif layer_idx == 1:
+                    color = (255, 150, 0) if val > 0 else (40, 40, 40)
+                else:
+                    if i == action_idx:
+                        color = (0, 0, 255)
+                    else:
+                        color = (40, 40, 40)
+
+                cv2.circle(img, (x, y), 12, color, -1)
+                cv2.circle(img, (x, y), 12, (150, 150, 150), 1)
+
+        actions_str = ["OESTE", "ESTE", "DISPARAR"]
+        action_text = f"Decisao: Mover para {actions_str[action_idx]}" if action_idx != 2 else "Decisao: DISPARAR LASER"
+        cv2.putText(img, action_text, (250, 470), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+
+        cv2.imshow("Neural Network Dashboard", img)
+        cv2.waitKey(1)
 
     async def deliberate(self) -> Optional[Dict[str, Any]]:
         if not self.current_state or self.current_state.get("game_over"):
             return None
             
         inputs = extract_features(self.current_state)
-        outputs = self.net.activate(inputs)
-        action_idx = np.argmax(outputs)
+        
+        with torch.no_grad():
+            outputs, activations = self.model.predict_and_observe(inputs)
+            action_idx = torch.argmax(outputs).item()
+        
+        self.draw_network_cv2(activations, action_idx)
         
         action = None
         if action_idx == 0:
@@ -65,5 +149,8 @@ class NeatAgent(BaseAgent):
         return action
 
 if __name__ == "__main__":
-    agent = NeatAgent("config-feedforward.txt", "winner.pkl")
-    asyncio.run(agent.run())
+    agent = PyTorchSpaceAgent("best_pytorch_weights.json")
+    try:
+        asyncio.run(agent.run())
+    finally:
+        cv2.destroyAllWindows()

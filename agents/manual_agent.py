@@ -7,6 +7,7 @@ import asyncio
 import json
 import select
 import sys
+import platform
 
 has_termios = False
 termios = None
@@ -67,39 +68,50 @@ async def send_loop(websocket):
         old_settings = termios.tcgetattr(fd)
         tty.setraw(fd)
 
+    is_windows = platform.system() == "Windows"
+    if is_windows:
+        import msvcrt
+
     try:
         while True:
             key = ""
-            if has_termios and fd is not None:
+            
+            # 1. Lógica para Windows
+            if is_windows:
+                if msvcrt.kbhit():
+                    key_bytes = msvcrt.getch()
+                    try:
+                        key = key_bytes.decode('utf-8').lower()
+                    except UnicodeDecodeError:
+                        pass
+                        
+            # 2. Lógica original para Linux/macOS
+            elif has_termios and fd is not None:
                 rlist, _, _ = select.select([sys.stdin], [], [], 0.05)
                 if rlist:
                     key = sys.stdin.read(1)
+            
+            # Lógica de fallback original (bloqueante)
             else:
-                line = sys.stdin.readline().strip().lower()
-                if line == "a":
-                    key = "a"
-                elif line == "d":
-                    key = "d"
-                elif line == " ":
-                    key = " "
-                elif line == "q":
-                    key = "q"
+                pass 
 
+            # Processamento do input
             if key:
-                if key.lower() == "q":
+                if key == "q":
                     break
-                if key.lower() == "a":
+                elif key == "a":
                     await websocket.send(json.dumps({"action": "move", "direction": "WEST"}))
-                elif key.lower() == "d":
+                elif key == "d":
                     await websocket.send(json.dumps({"action": "move", "direction": "EAST"}))
                 elif key == " ":
                     await websocket.send(json.dumps({"action": "shoot"}))
+                    
             await asyncio.sleep(0.02)
     finally:
         if fd is not None and old_settings is not None and termios is not None:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         print("\nExiting Manual Agent...")
-
+        
 async def main():
     url = "ws://localhost:8765/ws"
     print(f"Connecting to Space Invaders Server on {url}...")
