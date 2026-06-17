@@ -46,7 +46,8 @@ def eval_single_game(genome, config):
     env = logic.SpaceInvaders()
     
     fixed_dt = 1.0 / 30.0
-    max_steps = 3000
+    # AUMENTAMOS PARA 6000 STEPS (Mais de 3 minutos de sobrevivência!)
+    max_steps = 6000 
     steps = 0
     fitness = 0.0
     
@@ -56,28 +57,42 @@ def eval_single_game(genome, config):
         state = env.get_state()
         inputs = extract_features(state)
 
+        # Registo do Mapa de Calor
         current_x_int = int(min(env.player_x, env.width - 1))
         x_heatmap[current_x_int] += 1
 
+        # --- SISTEMA DE PRIORIDADES (DEFESA VS CAÇA) ---
         aliens = state.get('aliens', [])
         if aliens:
             diving_aliens = [a for a in aliens if a.get('is_diving')]
+            static_aliens = [a for a in aliens if not a.get('is_diving')]
+            
+            # PRIORIDADE 1: Ameaça Iminente (Dives)
             if diving_aliens:
                 closest_diver = min(diving_aliens, key=lambda a: a['y'])
+                
                 if closest_diver['y'] < 4.0:
+                    # Modo Evasão (Perigo extremo)
                     dist_x = abs(state.get('player_x', 0) - closest_diver['x'])
                     evasao = min(1.0, dist_x / 3.0) 
                     fitness += evasao * 0.2
                 else:
+                    # Modo Intersecção (Preparar o tiro)
                     dist_x = abs(state.get('player_x', 0) - closest_diver['x'])
                     alinhamento = max(0.0, 1.0 - (dist_x / env.width))
                     fitness += alinhamento * 0.2
-            else:
-                closest_alien = min(aliens, key=lambda a: a['y'])
-                dist_x = abs(state.get('player_x', 0) - closest_alien['x'])
+                    
+            # PRIORIDADE 2: MODO CAÇADOR (Ecrã Seguro)
+            elif static_aliens:
+                closest_static = min(static_aliens, key=lambda a: a['y'])
+                dist_x = abs(state.get('player_x', 0) - closest_static['x'])
+                
+                # Alinhamento perfeito dá 1.0, multiplicado por 0.6!
+                # Isto é 3x mais sumo do que a defesa, ela vai CORRER atrás deles!
                 alinhamento = max(0.0, 1.0 - (dist_x / env.width))
-                fitness += alinhamento * 0.2
+                fitness += alinhamento * 0.6 
         
+        # Ação da Rede
         outputs = net.activate(inputs)
         action_idx = np.argmax(outputs)
         
@@ -91,15 +106,14 @@ def eval_single_game(genome, config):
         env.update(fixed_dt)
         steps += 1
         
-    # ----------------------------------------------------
-    # O TEU NOVO SISTEMA DE PENALIZAÇÃO (0.75 ou 1.0)
-    # ----------------------------------------------------
+    # --- PENALIZAÇÕES E RECOMPENSAS FINAIS ---
     fitness += (env.score * 5.0) - (steps * 0.75) 
     
     fitness -= (3 - env.lives) * 500
     if env.lives <= 0:
         fitness -= 1000
 
+    # Punição Anti-Camp (Mapa de Calor de 45%)
     if steps > 0:
         max_time_in_one_spot = np.max(x_heatmap) / steps
         if max_time_in_one_spot > 0.45:
@@ -149,4 +163,4 @@ def run_finetuning(config_file, winner_file, output_file):
     print(f"\nFine-Tuning concluído! Novo campeão guardado em '{output_file}'")
 
 if __name__ == "__main__":
-    run_finetuning("config_finetune.txt", "winner_goated_behaviour.pkl", "winner_075.pkl")
+    run_finetuning("config_finetune.txt", "winner_075.pkl", "winner_075_v2.pkl")
