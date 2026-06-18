@@ -12,43 +12,24 @@ def extract_features(state):
     height = float(state.get('height', 11))
     player_x = state.get('player_x', 0)
     
-    features = np.zeros(6)
-    features[0] = player_x / float(width)
-    
-    lasers = state.get('lasers', [])
-    features[1] = 1.0 if lasers else 0.0
-    features[2] = lasers[0]['y'] / height if lasers else 1.0
-    
-    # alien_columns = np.zeros(width)
-    diving_aliens = []
-    
-    for alien in state.get('aliens', []):
-        # col = int(round(alien['x']))
-        # if 0 <= col < width:
-        #     alien_columns[col] = 1
-                
-        if alien.get('is_diving', False):
-            diving_aliens.append(alien)
-                
-    # features[3:14] = alien_columns[:11]
+    features = np.zeros(2)
+    aliens=state.get('aliens', [])
+    diving_aliens = [a for a in aliens if a['is_diving']]
     
     if diving_aliens:
-        closest_diver = min(diving_aliens, key=lambda a: a['y'])
-        
-        features[3] = 1.0 
-        
-        features[4] = (closest_diver['x'] - player_x) / float(width)
-        
-        features[5] = closest_diver['y'] / height
+        alien=diving_aliens[0]
     else:
-        features[3] = 0.0
-        features[4] = 0.0
-        features[5] = 0.0
+        alien = sorted(
+        aliens,
+        key=lambda a: abs(player_x - a['x'])
+        )[0]
+    features[0] = (alien['x'] - player_x) / float(width)  
+    features[1] = alien['y']  / float(height)  
         
     return features
 
 class PyTorchAgent(nn.Module):
-    def __init__(self, input_dim=6, hidden_dim=5, output_dim=3):
+    def __init__(self, input_dim=2, hidden_dim=6, output_dim=3):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.relu = nn.ReLU()
