@@ -46,7 +46,6 @@ def eval_single_game(genome, config):
     env = logic.SpaceInvaders()
     
     fixed_dt = 1.0 / 30.0
-    # AUMENTAMOS PARA 6000 STEPS (Mais de 3 minutos de sobrevivência!)
     max_steps = 6000 
     steps = 0
     fitness = 0.0
@@ -80,17 +79,18 @@ def eval_single_game(genome, config):
                     # Modo Intersecção (Preparar o tiro)
                     dist_x = abs(state.get('player_x', 0) - closest_diver['x'])
                     alinhamento = max(0.0, 1.0 - (dist_x / env.width))
-                    fitness += alinhamento * 0.2
+                    fitness += alinhamento * 0.4
                     
             # PRIORIDADE 2: MODO CAÇADOR (Ecrã Seguro)
             elif static_aliens:
                 closest_static = min(static_aliens, key=lambda a: a['y'])
-                dist_x = abs(state.get('player_x', 0) - closest_static['x'])
+                target_x = round(closest_static['x'])
+                dist_x = abs(state.get('player_x', 0) - target_x)
                 
                 # Alinhamento perfeito dá 1.0, multiplicado por 0.6!
                 # Isto é 3x mais sumo do que a defesa, ela vai CORRER atrás deles!
                 alinhamento = max(0.0, 1.0 - (dist_x / env.width))
-                fitness += alinhamento * 0.6 
+                fitness += alinhamento * 1.0
         
         # Ação da Rede
         outputs = net.activate(inputs)
@@ -107,7 +107,7 @@ def eval_single_game(genome, config):
         steps += 1
         
     # --- PENALIZAÇÕES E RECOMPENSAS FINAIS ---
-    fitness += (env.score * 5.0) - (steps * 0.75) 
+    fitness += (env.score * 5.0) - (steps * 0.75)
     
     fitness -= (3 - env.lives) * 500
     if env.lives <= 0:
@@ -163,4 +163,4 @@ def run_finetuning(config_file, winner_file, output_file):
     print(f"\nFine-Tuning concluído! Novo campeão guardado em '{output_file}'")
 
 if __name__ == "__main__":
-    run_finetuning("config_finetune.txt", "winner_075.pkl", "winner_075_v2.pkl")
+    run_finetuning("config_finetune.txt", "winner_075_v3.pkl", "winner_075_v4.pkl")
