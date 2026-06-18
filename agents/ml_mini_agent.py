@@ -6,39 +6,23 @@ from typing import Optional, Dict, Any
 from agents.base_agent import BaseAgent
 
 def extract_features(state):
-    features = np.zeros(11) 
-    width = state.get('width', 11)
-    height = state.get('height', 11)
+    width = int(state.get('width', 11))
+    height = float(state.get('height', 11))
+    player_x = state.get('player_x', 0)
     
-    features[0] = state.get('player_x', width/2) / width
+    features = np.zeros(2)
+    aliens=state.get('aliens', [])
+    diving_aliens = [a for a in aliens if a['is_diving']]
     
-    lasers = state.get('lasers', [])
-    features[1] = 1.0 if lasers else 0.0
-    if lasers:
-        features[2] = lasers[0]['x'] / width
-        features[3] = lasers[0]['y'] / height
-        
-    aliens = state.get('aliens', [])
-    if aliens:
-        diving_aliens = [a for a in aliens if a.get('is_diving')]
-        static_aliens = [a for a in aliens if not a.get('is_diving')]
-        
-        if static_aliens:
-            closest_static = min(static_aliens, key=lambda a: a['y'])
-            features[4] = closest_static['x'] / width
-            features[5] = closest_static['y'] / height
-            
-        if diving_aliens:
-            closest_diver = min(diving_aliens, key=lambda a: a['y'])
-            features[6] = closest_diver['x'] / width
-            features[7] = closest_diver['y'] / height
-            features[8] = (closest_diver['x'] - state.get('player_x', 0)) / width
-            
-        features[9] = len(aliens) / 10.0
-
-    valid_actions = state.get("valid_actions", [])
-    can_shoot = any(act.get("action") == "shoot" for act in valid_actions)
-    features[10] = 1.0 if can_shoot else 0.0
+    if diving_aliens:
+        alien=diving_aliens[0]
+    else:
+        alien = sorted(
+        aliens,
+        key=lambda a: abs(player_x - a['x'])
+        )[0]
+    features[0] = (alien['x'] - player_x) / float(width)  
+    features[1] = alien['y']  / float(height)  
         
     return features
 
@@ -70,8 +54,9 @@ class NeatAgent(BaseAgent):
             action = {"action": "move", "direction": "EAST"}
         elif action_idx == 2:
             action = {"action": "shoot"}
+            
         return action
 
 if __name__ == "__main__":
-    agent = NeatAgent("config_finetune.txt", "winner.pkl")
+    agent = NeatAgent("config-mini.txt", "winner_mini.pkl")
     asyncio.run(agent.run())
