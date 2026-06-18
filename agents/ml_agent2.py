@@ -82,6 +82,7 @@ class NeatAgent(BaseAgent):
         return action
 
 if __name__ == "__main__":
-    agent = NeatAgent("config_finetune.txt", "winner_100_v3.pkl")
+    agent = NeatAgent("config_finetune.txt", "winner_075_v4.pkl")
+    # agent = NeatAgent("config_finetune.txt", "winner_100_v4.pkl")
     # agent = NeatAgent("config.txt", "winner_goated_behaviour.pkl")
     asyncio.run(agent.run())
