@@ -1,0 +1,39 @@
+[project]
+name = "si2-space-invaders"
+version = "0.3.0"
+description = "Space Invaders for Agent training"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Mário Antunes", email = "mario.antunes@ua.pt"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+]
+
+[tool.basedpyright]
+typeCheckingMode = "standard"
+failOnWarnings = false
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    ".git",
+    "venv",
+    "agents"
+]
+
+venvPath = "."
+venv = "venv"
+extraPaths = ["src"]
+
+[tool.ruff]
+line-length = 120
+exclude = [
+    "venv",
+    ".venv",
+    "agents"
+]

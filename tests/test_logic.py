@@ -41,7 +41,7 @@ class TestSpaceInvadersLogic(unittest.TestCase):
         self.assertEqual(len(self.game.lasers), 1)
 
         # Fast forward time past cooldown
-        self.game.update(0.4)
+        self.game.update(0.6)
         self.game.shoot_laser()
         self.assertEqual(len(self.game.lasers), 2)
 
@@ -158,5 +158,63 @@ class TestSpaceInvadersLogic(unittest.TestCase):
         state = self.game.get_state()
         self.assertEqual(state["valid_actions"], [])
 
+    def test_difficulty_scaling(self):
+        # Verify the calculation is working by setting score
+        self.game.score = 200
+        # When update runs, it computes difficulty_scale and sweep_offset
+        self.game.update(0.1)
+        
+        # Let's test that the alien update was called with difficulty_scale=1.25
+        # Since update is called on aliens, they move according to the difficulty_scale.
+        # Let's check difficulty_scale directly in update loop or state if needed.
+        # But we can verify it by checking that an alien's update is affected by difficulty_scale.
+        alien = self.game.aliens[0]
+        # Reset alien position, active, and not diving
+        alien.active = True
+        alien.is_diving = False
+        alien.base_x = 5.0
+        alien.base_y = 5.0
+        # For difficulty_scale = 1.0:
+        alien.update(dt=0.1, time_elapsed=1.0, base_shift_x=0.0, player_x=5.0, difficulty_scale=1.0)
+        x_1 = alien.x
+        
+        # Reset and run with difficulty_scale = 2.0:
+        alien.x = 5.0
+        alien.y = 5.0
+        alien.update(dt=0.1, time_elapsed=1.0, base_shift_x=0.0, player_x=5.0, difficulty_scale=2.0)
+        x_2 = alien.x
+        
+        # The movements should be different because of frequency scaling
+        self.assertNotEqual(x_1, x_2)
+
+    def test_predictive_interception(self):
+        alien = self.game.aliens[0]
+        alien.active = True
+        # Set a target x far from alien's x
+        alien.x = 2.0
+        alien.y = 10.0
+        alien.start_dive(player_x=8.0, speed=10.0)
+        
+        # Under predictive interception:
+        # time_to_ground = max(0.1, y / dive_speed) = max(0.1, 10.0 / 10.0) = 1.0
+        # vx = (target_x - x) / time_to_ground = (8.0 - 2.0) / 1.0 = 6.0
+        # Cap is 1.5 * dive_speed = 15.0, so 6.0 is not capped.
+        # self.x += vx * dt -> self.x += 6.0 * 0.1 = 0.6 => self.x becomes 2.6
+        # self.y += vy * dt -> self.y += -10.0 * 0.1 = -1.0 => self.y becomes 9.0
+        
+        alien.update(dt=0.1, time_elapsed=1.0, base_shift_x=0.0, player_x=8.0, difficulty_scale=1.0)
+        
+        self.assertAlmostEqual(alien.x, 2.6)
+        self.assertAlmostEqual(alien.y, 9.0)
+        
+        # Test the speed capping logic:
+        # Let's place target_x very far to force vx to exceed max_vx (1.5 * 10.0 = 15.0)
+        # e.g., target_x = 100.0. (100.0 - 2.6) / (9.0 / 10.0) = 97.4 / 0.9 = 108.2
+        # Capped vx should be 15.0
+        # So alien.x should increase by 15.0 * 0.1 = 1.5 => 2.6 + 1.5 = 4.1
+        alien.update(dt=0.1, time_elapsed=1.1, base_shift_x=0.0, player_x=100.0, difficulty_scale=1.0)
+        self.assertAlmostEqual(alien.x, 4.1)
+
 if __name__ == "__main__":
     unittest.main()
+

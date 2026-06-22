@@ -43,22 +43,19 @@ class Alien:
         
         # Diving state variables
         self.is_diving = False
-        self.dive_start_x = 0.0
-        self.dive_start_y = 0.0
         self.target_x = 0.0
-        self.target_y = 0.0
         self.dive_speed = 5.0
         
         self.active = True
 
-    def update(self, dt: float, time_elapsed: float, base_shift_x: float = 0.0, player_x: float = None):
+    def update(self, dt: float, time_elapsed: float, base_shift_x: float = 0.0, player_x: float | None = None, difficulty_scale: float = 1.0):
         if not self.active:
             return
 
         if not self.is_diving:
             # Figure-8 parametric motion + global shift
-            self.x = (self.base_x + base_shift_x) + self.amp_x * math.sin(self.freq * time_elapsed + self.phase)
-            self.y = self.base_y + self.amp_y * math.sin(2.0 * self.freq * time_elapsed + self.phase)
+            self.x = (self.base_x + base_shift_x) + self.amp_x * math.sin(self.freq * difficulty_scale * time_elapsed + self.phase)
+            self.y = self.base_y + self.amp_y * math.sin(2.0 * self.freq * difficulty_scale * time_elapsed + self.phase)
         else:
             # Homing tracking: if the alien is above y = 3.0, track the player's current x position
             if player_x is not None and self.y > 3.0:
@@ -67,23 +64,20 @@ class Alien:
             # Constant downward speed
             vy = -self.dive_speed
             
-            # Horizontal motion tracks target_x
-            dx = self.target_x - self.x
-            vx = dx * 4.0
-            if vx > self.dive_speed:
-                vx = self.dive_speed
-            elif vx < -self.dive_speed:
-                vx = -self.dive_speed
+            # Predictive Interception: Calculate horizontal velocity needed to hit target at y=0
+            time_to_ground = max(0.1, self.y / self.dive_speed)
+            vx = (self.target_x - self.x) / time_to_ground
+            
+            # Cap horizontal speed to 1.5x dive speed to prevent teleporting
+            max_vx = self.dive_speed * 1.5
+            vx = max(-max_vx, min(max_vx, vx))
             
             self.x += vx * dt
             self.y += vy * dt
 
     def start_dive(self, player_x: float, speed: float = 8.0):
         self.is_diving = True
-        self.dive_start_x = self.x
-        self.dive_start_y = self.y
         self.target_x = player_x
-        self.target_y = 0.0
         self.dive_speed = speed
 
     def reset_dive(self):
@@ -121,7 +115,7 @@ class SpaceInvaders:
         self.dive_cooldown = 3.0
         self.time_since_last_dive = 0.0
         
-        self.shoot_cooldown = 0.3
+        self.shoot_cooldown = 0.5
         self.time_since_last_shoot = self.shoot_cooldown
         
         self._init_aliens()
@@ -190,9 +184,13 @@ class SpaceInvaders:
         self.lasers = active_lasers
 
         # 2. Update Aliens
-        sweep_offset = 1.5 * math.sin(1.2 * self.time_elapsed)
+        # Calculate difficulty scale based on current dive speed (8.0 base -> 12.0 max)
+        current_dive_speed = min(12.0, 8.0 + 0.01 * self.score)
+        difficulty_scale = current_dive_speed / 8.0
+        
+        sweep_offset = 1.5 * math.sin(1.2 * difficulty_scale * self.time_elapsed)
         for alien in self.aliens:
-            alien.update(dt, self.time_elapsed, base_shift_x=sweep_offset, player_x=self.player_x)
+            alien.update(dt, self.time_elapsed, base_shift_x=sweep_offset, player_x=self.player_x, difficulty_scale=difficulty_scale)
 
         # 3. Schedule Alien Dives
         current_cooldown = max(1.5, self.dive_cooldown - 0.005 * self.score)
@@ -200,8 +198,7 @@ class SpaceInvaders:
             available_aliens = [a for a in self.aliens if a.active and not a.is_diving]
             if available_aliens:
                 diving_alien = random.choice(available_aliens)
-                dive_speed = min(12.0, 8.0 + 0.01 * self.score)
-                diving_alien.start_dive(self.player_x, speed=dive_speed)
+                diving_alien.start_dive(self.player_x, speed=current_dive_speed)
             self.time_since_last_dive = 0.0
 
         # 4. Check Laser-Alien Collisions (Distance < 0.8) using numpy
