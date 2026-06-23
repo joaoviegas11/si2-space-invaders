@@ -7,7 +7,6 @@ import math
 import random
 from typing import Dict, List, Any
 
-
 class Laser:
     def __init__(self, x: float, y: float, speed: float = 8.0):
         self.x = x
@@ -19,30 +18,34 @@ class Laser:
         self.y += self.speed * dt
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"x": self.x, "y": self.y, "speed": self.speed, "active": self.active}
-
+        return {
+            "x": self.x,
+            "y": self.y,
+            "speed": self.speed,
+            "active": self.active
+        }
 
 class Alien:
     def __init__(self, index: int, base_x: float, base_y: float):
         self.index = index
         self.base_x = base_x
         self.base_y = base_y
-
+        
         # Desynchronized horizontal figure-8 amplitudes, frequency and phase
         self.amp_x = 0.8 + 0.1 * (index % 3)
         self.amp_y = 0.5 + 0.05 * (index % 2)
         self.freq = 1.0 + 0.15 * (index % 4)
         self.phase = (2.0 * math.pi / 10.0) * index
-
+        
         # Dynamic float positions
         self.x = base_x
         self.y = base_y
-
+        
         # Diving state variables
         self.is_diving = False
         self.target_x = 0.0
         self.dive_speed = 5.0
-
+        
         self.active = True
 
     def update(self, dt: float, time_elapsed: float, base_shift_x: float = 0.0, player_x: float | None = None, difficulty_scale: float = 1.0):
@@ -86,9 +89,8 @@ class Alien:
             "x": self.x,
             "y": self.y,
             "is_diving": self.is_diving,
-            "active": self.active,
+            "active": self.active
         }
-
 
 class SpaceInvaders:
     def __init__(self, width: int = 11, height: int = 11, fps: int = 30):
@@ -105,27 +107,27 @@ class SpaceInvaders:
         self.score = 0
         self.checkpoint_score = 0
         self.game_over = False
-
+        
         self.aliens: List[Alien] = []
         self.lasers: List[Laser] = []
-
+        
         self.time_elapsed = 0.0
         self.dive_cooldown = 3.0
         self.time_since_last_dive = 0.0
         
         self.shoot_cooldown = 0.5
         self.time_since_last_shoot = self.shoot_cooldown
-
+        
         self._init_aliens()
 
     def _init_aliens(self):
         self.aliens = []
-
+        
         # 2 rows of 5 aliens
         # Columns centered nicely: 2.0, 3.5, 5.0, 6.5, 8.0
         columns = [2.0, 3.5, 5.0, 6.5, 8.0]
         rows = [8.0, 9.0]
-
+        
         index = 0
         for y_base in rows:
             for x_base in columns:
@@ -157,11 +159,11 @@ class SpaceInvaders:
         self.score = self.checkpoint_score
         self.player_x = float(self.width // 2)
         self.lasers = []
-
+        
         # Reset any diving alien
         for alien in self.aliens:
             alien.reset_dive()
-
+            
         if self.lives <= 0:
             self.game_over = True
 
@@ -202,18 +204,17 @@ class SpaceInvaders:
         # 4. Check Laser-Alien Collisions (Distance < 0.8) using numpy
         if self.lasers and self.aliens:
             import numpy as np
-
             active_aliens = [a for a in self.aliens if a.active]
             if active_aliens:
                 laser_coords = np.array([[las.x, las.y] for las in self.lasers])
                 alien_coords = np.array([[a.x, a.y] for a in active_aliens])
-
+                
                 diff = laser_coords[:, np.newaxis, :] - alien_coords[np.newaxis, :, :]
                 dists = np.sqrt(np.sum(diff**2, axis=-1))
-
+                
                 collisions = dists < 0.8
                 laser_hit_idx, alien_hit_idx = np.where(collisions)
-
+                
                 hit_lasers = set()
                 hit_aliens = set()
                 for l_idx, a_idx in zip(laser_hit_idx, alien_hit_idx):
@@ -232,15 +233,14 @@ class SpaceInvaders:
         diving_aliens = [a for a in self.aliens if a.active and a.is_diving]
         if diving_aliens:
             import numpy as np
-
             alien_coords = np.array([[a.x, a.y] for a in diving_aliens])
             player_coord = np.array([self.player_x, self.player_y])
-
-            dists = np.sqrt(np.sum((alien_coords - player_coord) ** 2, axis=-1))
+            
+            dists = np.sqrt(np.sum((alien_coords - player_coord)**2, axis=-1))
             if np.any(dists < 0.8):
                 self._die()
                 return
-
+                
             for alien in diving_aliens:
                 if alien.y <= 0.0:
                     alien.reset_dive()
@@ -277,5 +277,5 @@ class SpaceInvaders:
             "game_over": self.game_over,
             "lasers": [las.to_dict() for las in self.lasers],
             "aliens": [a.to_dict() for a in self.aliens if a.active],
-            "valid_actions": valid_actions,
+            "valid_actions": valid_actions
         }
