@@ -49,11 +49,14 @@ class Alien:
         self.active = True
 
     def update(self, dt: float, time_elapsed: float, base_shift_x: float = 0.0, player_x: float | None = None, difficulty_scale: float = 1.0):
+    def update(self, dt: float, time_elapsed: float, base_shift_x: float = 0.0, player_x: float | None = None, difficulty_scale: float = 1.0):
         if not self.active:
             return
 
         if not self.is_diving:
             # Figure-8 parametric motion + global shift
+            self.x = (self.base_x + base_shift_x) + self.amp_x * math.sin(self.freq * difficulty_scale * time_elapsed + self.phase)
+            self.y = self.base_y + self.amp_y * math.sin(2.0 * self.freq * difficulty_scale * time_elapsed + self.phase)
             self.x = (self.base_x + base_shift_x) + self.amp_x * math.sin(self.freq * difficulty_scale * time_elapsed + self.phase)
             self.y = self.base_y + self.amp_y * math.sin(2.0 * self.freq * difficulty_scale * time_elapsed + self.phase)
         else:
@@ -114,6 +117,8 @@ class SpaceInvaders:
         self.time_elapsed = 0.0
         self.dive_cooldown = 3.0
         self.time_since_last_dive = 0.0
+        
+        self.shoot_cooldown = 0.5
         
         self.shoot_cooldown = 0.5
         self.time_since_last_shoot = self.shoot_cooldown
@@ -189,7 +194,13 @@ class SpaceInvaders:
         difficulty_scale = current_dive_speed / 8.0
         
         sweep_offset = 1.5 * math.sin(1.2 * difficulty_scale * self.time_elapsed)
+        # Calculate difficulty scale based on current dive speed (8.0 base -> 12.0 max)
+        current_dive_speed = min(12.0, 8.0 + 0.01 * self.score)
+        difficulty_scale = current_dive_speed / 8.0
+        
+        sweep_offset = 1.5 * math.sin(1.2 * difficulty_scale * self.time_elapsed)
         for alien in self.aliens:
+            alien.update(dt, self.time_elapsed, base_shift_x=sweep_offset, player_x=self.player_x, difficulty_scale=difficulty_scale)
             alien.update(dt, self.time_elapsed, base_shift_x=sweep_offset, player_x=self.player_x, difficulty_scale=difficulty_scale)
 
         # 3. Schedule Alien Dives
@@ -198,6 +209,7 @@ class SpaceInvaders:
             available_aliens = [a for a in self.aliens if a.active and not a.is_diving]
             if available_aliens:
                 diving_alien = random.choice(available_aliens)
+                diving_alien.start_dive(self.player_x, speed=current_dive_speed)
                 diving_alien.start_dive(self.player_x, speed=current_dive_speed)
             self.time_since_last_dive = 0.0
 
