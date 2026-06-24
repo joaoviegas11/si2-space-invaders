@@ -117,14 +117,14 @@ def run_evolution(config_file):
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
     
-    print("A iniciar o treino NEAT com 4 neurónios de entrada e avaliação em 3 episódios...")
-    winner = p.run(eval_genomes, 20)
+    print("A iniciar o treino NEAT com 4 neurónios de entrada")
+    winner = p.run(eval_genomes, 10)
     
-    with open("winner_mini.pkl", "wb") as f:
+    with open("winner.pkl", "wb") as f:
         pickle.dump(winner, f)
         
     print("\nTreino concluído. Guardado em 'winner.pkl'")
     return winner
 
 if __name__ == "__main__":
-    run_evolution("config-mini.txt")
+    run_evolution("config.txt")
