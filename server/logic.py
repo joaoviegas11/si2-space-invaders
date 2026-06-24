@@ -192,6 +192,8 @@ class SpaceInvaders:
 
         # 3. Schedule Alien Dives
         current_cooldown = max(1.5, self.dive_cooldown - 0.005 * self.score)
+        # print(self.score,current_dive_speed,difficulty_scale,current_cooldown)
+
         if self.time_since_last_dive >= current_cooldown:
             available_aliens = [a for a in self.aliens if a.active and not a.is_diving]
             if available_aliens:

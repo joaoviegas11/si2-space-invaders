@@ -63,7 +63,7 @@ async def receive_loop(websocket):
                     f"Active Aliens        : {len(aliens):<5} / 10 | Lasers on Screen: {len(lasers)}"
                 )
                 if game_over:
-                    print("=" * 18 + " 💥 GAME OVER! 💥 " + "=" * 18)
+                    print("=" * 18 + " GAME OVER! " + "=" * 18)
                 else:
                     print("=" * 65)
                 print(
