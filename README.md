@@ -81,7 +81,7 @@ A descida do score absoluto (de ~122k para ~88k) não representa uma perda de in
 
 
 Para treinar:
-- `python3 -m tests.test_model`
+- `python3 -m train.train_model`
 
 ---
 
