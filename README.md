@@ -79,6 +79,10 @@ A descida do score absoluto (de ~122k para ~88k) não representa uma perda de in
 3. `python3 -m agents.ml_agent` (Iniciar Agente Final)
 4. [http://localhost:8765/](http://localhost:8765/) (Visualização)
 
+
+Para treinar:
+- `python3 -m tests.test_model`
+
 ---
 
 ## 6. Gráfico de Evolução de Fitness
